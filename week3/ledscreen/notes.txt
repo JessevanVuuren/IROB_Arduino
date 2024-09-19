@@ -1,0 +1,9 @@
+// https://www.electronicshub.org/esp32-oled-display/
+// https://github.com/adafruit/Adafruit-SSD1331-OLED-Driver-Library-for-Arduino/blob/master/examples/displayOnOffTest/displayOnOffTest.ino
+// https://github.com/adafruit/Adafruit-SSD1331-OLED-Driver-Library-for-Arduino/tree/master
+// https://www.waveshare.com/wiki/0.95inch_RGB_OLED_(B)
+
+C:\Users\MASTER-PC\.platformio\penv\Scripts\platformio.exe run --target upload --environment esp32doit-devkit-v1
+
+C:\Users\MASTER-PC\.platformio\penv\Scripts\platformio.exe run --target upload --upload-port COM3
+C:\Users\MASTER-PC\.platformio\penv\Scripts\platformio.exe device monitor --port COM3
