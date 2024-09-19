@@ -59,10 +59,11 @@ uint16_t bitmap[SCREEN_HEIGHT * SCREEN_WIDTH] = {};
 
 int amount_of_layer = 0;
 Background layers[] = {
-    {.color = mountain, .amplitude = 7, .frequency = 17, .pos_y = 10, .speed = 1, .darken_color = 0.8},
-    {.color = mountain, .amplitude = 5, .frequency = 5, .pos_y = 15, .speed = 3, .darken_color = 1},
-    {.color = grass, .amplitude = 5, .frequency = 4, .pos_y = 30, .speed = 7, .darken_color = 0.6},
-    {.color = grass, .amplitude = 3, .frequency = 3, .pos_y = 32, .speed = 10, .darken_color = 0.8},
+    {.color = mountain, .amplitude = 7, .frequency = 17, .pos_y = 10, .speed = 0, .darken_color = 0.6},
+    {.color = mountain, .amplitude = 5, .frequency = 8, .pos_y = 15, .speed = 0.5, .darken_color = .8},
+    {.color = mountain, .amplitude = 4, .frequency = 5, .pos_y = 20, .speed = 1, .darken_color = 1},
+    {.color = grass, .amplitude = 5, .frequency = 4, .pos_y = 30, .speed = 3, .darken_color = 0.6},
+    {.color = grass, .amplitude = 3, .frequency = 3, .pos_y = 32, .speed = 6, .darken_color = 0.8},
     {.color = grass, .amplitude = 3, .frequency = 2, .pos_y = 40, .speed = 16, .darken_color = 1},
     {.color = water, .amplitude = 2, .frequency = 20, .pos_y = 60, .speed = 5, .darken_color = 0.6},
     {.color = water, .amplitude = 2, .frequency = 20, .pos_y = 60, .speed = 10, .darken_color = 1}};
@@ -179,7 +180,7 @@ void tree(Tree tree, double time) {
         for (size_t x = 0; x < tree.root_width; x++) {
             int adjusted_y = y + tree.pos_y + tree.height + space;
             int adjusted_x = x + (tree.width + tree.root_width) / 2 + tree.pos_x;
-            
+
             bitmap[adjusted_y * SCREEN_WIDTH + adjusted_x] = color_to_hex(tree_bark);
         }
     }
@@ -195,6 +196,14 @@ void plant_trees(double time) {
     }
 }
 
+void build_sin_table() {
+    for (size_t i = 0; i < amount_of_layer; i++) {
+        for (size_t y = 0; y < FULL_CIRCLE; y++) {
+            layers[i].sin_lookup[y] = sin(radians(y) * layers[i].frequency);
+        }
+    }
+}
+
 void setup() {
     display.begin();
     Serial.begin(115200);
@@ -204,12 +213,7 @@ void setup() {
     amount_of_trees = sizeof(trees) / sizeof(trees[0]);
     amount_of_layer = sizeof(layers) / sizeof(layers[0]);
 
-
-    for (size_t i = 0; i < amount_of_layer; i++) {
-        for (size_t y = 0; y < FULL_CIRCLE; y++) {
-            layers[i].sin_lookup[y] = sin(radians(y) * layers[i].frequency);
-        }
-    }
+    build_sin_table();
 }
 
 unsigned long timing = 0;
@@ -218,15 +222,12 @@ void loop() {
     double time = time_till_boot();
 
     build_world_layers(time);
-    
+
     plant_trees(time);
 
-    
+
     timing = millis();
     render_screen();
     Serial.print("time it took:");
     Serial.println(millis() - timing);
-
-
-
 }
