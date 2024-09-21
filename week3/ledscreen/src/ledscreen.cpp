@@ -15,7 +15,7 @@
 #define SCREEN_WIDTH 96
 #define SCREEN_HEIGHT 64
 
-// define full circle so sinus wave is seamless
+// define full circle so sine wave is seamless
 #define FULL_CIRCLE 360
 
 // Define all SSD1331 pins
@@ -67,6 +67,7 @@ const Color tree_leaf = {1, 97, 15};
 // range of sun over the valley
 const float sun_range = 5000;
 
+// set all pins for the display and make object
 Adafruit_SSD1331 display = Adafruit_SSD1331(DISPLAY_CS, DISPLAY_DC, DISPLAY_DIN, DISPLAY_CLK, DISPLAY_RESET);
 
 // create bitmap for performance increase when writing to screen
@@ -84,7 +85,7 @@ Background layers[] = {
     {.color = water, .amplitude = 2, .frequency = 20, .pos_y = 60, .speed = 5, .darken_color = 0.6},
     {.color = water, .amplitude = 2, .frequency = 20, .pos_y = 60, .speed = 10, .darken_color = 1}};
 
-// all tees defined in trees array
+// all trees defined in trees array
 int amount_of_trees = 0;
 Tree trees[] = {
     {.pos_x = 10, .pos_y = 25, .leaf1_shade = 1, .leaf2_shade = .6, .leaf3_shade = 1, .height = 10, .width = 5, .root_height = 7, .root_width = 3, .speed = 6},
@@ -130,7 +131,7 @@ void render_screen() {
 }
 
 // get time from boot in seconds
-double time_from_boot() {
+double time_from_boot_in_sec() {
     const double one_sec_to_miliseconds = 1000000;
     return (double)esp_timer_get_time() / one_sec_to_miliseconds;
 }
@@ -261,15 +262,20 @@ void setup() {
 unsigned long timing = 0;
 
 void loop() {
-    double time = time_from_boot();
+    // get time in seconds from boot to make animation play
+    double time = time_from_boot_in_sec();
     timing = millis();
 
     Serial.print("Render world: ");
 
+    // draw world layers in order on screen
     build_world_layers(time);
+
+    // draw all trees on screen
     plant_trees(time);
 
     Serial.println(millis() - timing);
 
+    // display the full bitmap on screen
     render_screen();
 }
