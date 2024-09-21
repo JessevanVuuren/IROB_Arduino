@@ -1,3 +1,12 @@
+/*
+  This code is for the EPS32 with SSD1331 OLED SCREEN: https://www.waveshare.com/wiki/0.95inch_RGB_OLED_(B)
+  This code is written by Jesse van Vuuren
+  Date: 11/09/2024
+
+  MIT License
+  Copyright (c) 2024 Jesse van Vuuren
+*/
+
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1331.h>
 #include <Arduino.h>
@@ -6,8 +15,10 @@
 #define SCREEN_WIDTH 96
 #define SCREEN_HEIGHT 64
 
+// define full circle so sinus wave is seamless
 #define FULL_CIRCLE 360
 
+// Define all SSD1331 pins
 #define DISPLAY_DIN 23
 #define DISPLAY_CLK 18
 #define DISPLAY_DC 16
@@ -20,6 +31,7 @@ typedef struct {
     uint8_t b;
 } Color;
 
+// Background layer settings
 typedef struct {
     Color color;
     float amplitude;
@@ -30,6 +42,7 @@ typedef struct {
     float sin_lookup[FULL_CIRCLE];
 } Background;
 
+// Tree settings
 typedef struct {
     int pos_x;
     int pos_y;
@@ -51,12 +64,15 @@ const Color water = {0, 255, 255};
 const Color mountain = {97, 97, 96};
 const Color tree_leaf = {1, 97, 15};
 
+// range of sun over the valley
 const float sun_range = 5000;
 
 Adafruit_SSD1331 display = Adafruit_SSD1331(DISPLAY_CS, DISPLAY_DC, DISPLAY_DIN, DISPLAY_CLK, DISPLAY_RESET);
 
+// create bitmap for performance increase when writing to screen
 uint16_t bitmap[SCREEN_HEIGHT * SCREEN_WIDTH] = {};
 
+// all background levels defined in layers array
 int amount_of_layer = 0;
 Background layers[] = {
     {.color = mountain, .amplitude = 7, .frequency = 17, .pos_y = 10, .speed = 0, .darken_color = 0.6},
@@ -68,6 +84,7 @@ Background layers[] = {
     {.color = water, .amplitude = 2, .frequency = 20, .pos_y = 60, .speed = 5, .darken_color = 0.6},
     {.color = water, .amplitude = 2, .frequency = 20, .pos_y = 60, .speed = 10, .darken_color = 1}};
 
+// all tees defined in trees array
 int amount_of_trees = 0;
 Tree trees[] = {
     {.pos_x = 10, .pos_y = 25, .leaf1_shade = 1, .leaf2_shade = .6, .leaf3_shade = 1, .height = 10, .width = 5, .root_height = 7, .root_width = 3, .speed = 6},
@@ -76,6 +93,7 @@ Tree trees[] = {
     {.pos_x = 60, .pos_y = 33, .leaf1_shade = 1, .leaf2_shade = .6, .leaf3_shade = 1, .height = 10, .width = 5, .root_height = 7, .root_width = 3, .speed = 6},
     {.pos_x = 63, .pos_y = 35, .leaf1_shade = 1, .leaf2_shade = .6, .leaf3_shade = 1, .height = 10, .width = 5, .root_height = 7, .root_width = 3, .speed = 6}};
 
+// darken a color 1 = no change, 0 = full black
 Color darken_color(Color c, float percentage) {
     c.r = c.r * percentage;
     c.g = c.g * percentage;
@@ -84,35 +102,41 @@ Color darken_color(Color c, float percentage) {
     return c;
 }
 
+// convert Color to hex => rgb565
 uint16_t color_to_hex(Color c) {
     return ((c.r >> 3) << 11) | ((c.g >> 2) << 5) | c.b >> 3;
 }
 
-Color blend_color(Color color1, Color color2, float blend) {
-    if (blend < 0) blend = 0;
-    if (blend > 1) blend = 1;
+// blend between colors based on percentage 0 = no blend, 1 full blend 
+Color blend_color(Color color1, Color color2, float percentage) {
+    if (percentage < 0) percentage = 0;
+    if (percentage > 1) percentage = 1;
 
     Color c;
-    c.r = (uint8_t)(color1.r * (1 - blend) + color2.r * blend);
-    c.g = (uint8_t)(color1.g * (1 - blend) + color2.g * blend);
-    c.b = (uint8_t)(color1.b * (1 - blend) + color2.b * blend);
+    c.r = (uint8_t)(color1.r * (1 - percentage) + color2.r * percentage);
+    c.g = (uint8_t)(color1.g * (1 - percentage) + color2.g * percentage);
+    c.b = (uint8_t)(color1.b * (1 - percentage) + color2.b * percentage);
     return c;
 }
 
+// convert rgb888 to hex => rgb565
 uint16_t color_to_hex(uint8_t r, uint8_t g, uint8_t b) {
     return ((r >> 3) << 11) | ((g >> 2) << 5) | b >> 3;
 }
 
+// draw bitmap on screen
 void render_screen() {
     display.drawRGBBitmap(0, 0, bitmap, SCREEN_WIDTH, SCREEN_HEIGHT);
 }
 
-double time_till_boot() {
+// get time from boot in seconds
+double time_from_boot() {
     const double one_sec_to_miliseconds = 1000000;
     return (double)esp_timer_get_time() / one_sec_to_miliseconds;
 }
 
-void make_screen(Color color) {
+// flush screen with one color
+void fill_screen_blank_color(Color color) {
     for (size_t y = 0; y < SCREEN_HEIGHT; y++) {
         for (size_t x = 0; x < SCREEN_WIDTH; x++) {
             bitmap[y * SCREEN_WIDTH + x] = color_to_hex(color);
@@ -120,6 +144,9 @@ void make_screen(Color color) {
     }
 }
 
+// this function takes the sin value from the lookup table and compares it with the y value of the screen
+// if true the function returns the layer color value with shade
+// if false the function returns the input color
 Color set_world_layer(Background layer, int x, int y, Color color, double time) {
     int index = (x + (int)(time * layer.speed)) % (FULL_CIRCLE - 1);
 
@@ -130,6 +157,8 @@ Color set_world_layer(Background layer, int x, int y, Color color, double time) 
     return color;
 }
 
+// loops over every background layer and draws the color on the bitmap
+// it also calculates the sun value over very pixel 
 void build_world_layers(double time) {
     for (size_t y = 0; y < SCREEN_HEIGHT; y++) {
         for (size_t x = 0; x < SCREEN_WIDTH; x++) {
@@ -162,16 +191,21 @@ void build_world_layers(double time) {
     }
 }
 
+// draw a triangle that looks like a leaf. from the tree object
 void make_leaf(Tree tree, int space, float shade) {
     for (int y = 0; y < tree.height; y++) {
         for (int x = tree.width - y + tree.width / 2; x <= tree.width + y - tree.width / 2; x++) {
             Color color = darken_color(tree_leaf, shade);
-            int index = (y + tree.pos_y + space) * SCREEN_WIDTH + x + tree.pos_x;
-            bitmap[index] = color_to_hex(color);
+
+            int adjusted_y = y + tree.pos_y + space;
+            int adjusted_x = x + tree.pos_x;
+
+            bitmap[adjusted_y * SCREEN_WIDTH + adjusted_x % SCREEN_WIDTH] = color_to_hex(color);
         }
     }
 }
 
+// plant tree in valley
 void tree(Tree tree, double time) {
     tree.pos_x = tree.pos_x - (time * tree.speed);
     int space = tree.height / 2;
@@ -181,7 +215,7 @@ void tree(Tree tree, double time) {
             int adjusted_y = y + tree.pos_y + tree.height + space;
             int adjusted_x = x + (tree.width + tree.root_width) / 2 + tree.pos_x;
 
-            bitmap[adjusted_y * SCREEN_WIDTH + adjusted_x] = color_to_hex(tree_bark);
+            bitmap[adjusted_y * SCREEN_WIDTH + adjusted_x % SCREEN_WIDTH] = color_to_hex(tree_bark);
         }
     }
 
@@ -196,6 +230,9 @@ void plant_trees(double time) {
     }
 }
 
+// this function builds the sine wave tables for every background layer before hand.
+// sin is quite a heavy calculation witch slows the animation down
+// making a lookup table beforehand increases performance drastically 
 void build_sin_table() {
     for (size_t i = 0; i < amount_of_layer; i++) {
         for (size_t y = 0; y < FULL_CIRCLE; y++) {
@@ -208,26 +245,31 @@ void setup() {
     display.begin();
     Serial.begin(115200);
 
-    make_screen((Color){255, 255, 255});
+    // clear screen
+    fill_screen_blank_color((Color){255, 255, 255});
 
+    // calculate int length of arrays;
     amount_of_trees = sizeof(trees) / sizeof(trees[0]);
     amount_of_layer = sizeof(layers) / sizeof(layers[0]);
 
+    // build lookup table
     build_sin_table();
+
+    Serial.println("Starting main render loop");
 }
 
 unsigned long timing = 0;
 
 void loop() {
-    double time = time_till_boot();
+    double time = time_from_boot();
+    timing = millis();
+
+    Serial.print("Render world: ");
 
     build_world_layers(time);
-
     plant_trees(time);
 
-
-    timing = millis();
-    render_screen();
-    Serial.print("time it took:");
     Serial.println(millis() - timing);
+
+    render_screen();
 }
