@@ -266,7 +266,7 @@ void loop() {
     double time = time_from_boot_in_sec();
     timing = millis();
 
-    Serial.print("Render world: ");
+    Serial.print("Build world in: ");
 
     // draw world layers in order on screen
     build_world_layers(time);
@@ -274,7 +274,8 @@ void loop() {
     // draw all trees on screen
     plant_trees(time);
 
-    Serial.println(millis() - timing);
+    Serial.print(millis() - timing);
+    Serial.println(" millis");
 
     // display the full bitmap on screen
     render_screen();
