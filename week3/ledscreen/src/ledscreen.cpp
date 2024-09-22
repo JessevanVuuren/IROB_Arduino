@@ -18,6 +18,9 @@
 // define full circle so sine wave is seamless
 #define FULL_CIRCLE 360
 
+// set communication speed to 115200 baud
+#define SERIAL_MONITOR_BAUD_RATE 115200  
+
 // Define all SSD1331 pins
 #define DISPLAY_DIN 23
 #define DISPLAY_CLK 18
@@ -70,7 +73,8 @@ const float sun_range = 5000;
 // set all pins for the display and make object
 Adafruit_SSD1331 display = Adafruit_SSD1331(DISPLAY_CS, DISPLAY_DC, DISPLAY_DIN, DISPLAY_CLK, DISPLAY_RESET);
 
-// create bitmap for performance increase when writing to screen
+// create 2 bitmap's for performance increase when writing to screen
+uint16_t old_bitmap[SCREEN_HEIGHT * SCREEN_WIDTH] = {};
 uint16_t bitmap[SCREEN_HEIGHT * SCREEN_WIDTH] = {};
 
 // all background levels defined in layers array
@@ -108,7 +112,7 @@ uint16_t color_to_hex(Color c) {
     return ((c.r >> 3) << 11) | ((c.g >> 2) << 5) | c.b >> 3;
 }
 
-// blend between colors based on percentage 0 = no blend, 1 full blend 
+// blend between colors based on percentage 0 = no blend, 1 full blend
 Color blend_color(Color color1, Color color2, float percentage) {
     if (percentage < 0) percentage = 0;
     if (percentage > 1) percentage = 1;
@@ -125,9 +129,12 @@ uint16_t color_to_hex(uint8_t r, uint8_t g, uint8_t b) {
     return ((r >> 3) << 11) | ((g >> 2) << 5) | b >> 3;
 }
 
-// draw bitmap on screen
-void render_screen() {
-    display.drawRGBBitmap(0, 0, bitmap, SCREEN_WIDTH, SCREEN_HEIGHT);
+// draw bitmap on screen ignore unchanged rows
+void render_screen(int unchanged_rows) {
+    uint16_t *offset_array = bitmap;
+    offset_array += SCREEN_WIDTH * unchanged_rows;
+
+    display.drawRGBBitmap(0, unchanged_rows, offset_array, SCREEN_WIDTH, SCREEN_HEIGHT - unchanged_rows);
 }
 
 // get time from boot in seconds
@@ -159,7 +166,7 @@ Color set_world_layer(Background layer, int x, int y, Color color, double time) 
 }
 
 // loops over every background layer and draws the color on the bitmap
-// it also calculates the sun value over very pixel 
+// it also calculates the sun value over very pixel
 void build_world_layers(double time) {
     for (size_t y = 0; y < SCREEN_HEIGHT; y++) {
         for (size_t x = 0; x < SCREEN_WIDTH; x++) {
@@ -233,7 +240,7 @@ void plant_trees(double time) {
 
 // this function builds the sine wave tables for every background layer before hand.
 // sin is quite a heavy calculation witch slows the animation down
-// making a lookup table beforehand increases performance drastically 
+// making a lookup table beforehand increases performance drastically
 void build_sin_table() {
     for (size_t i = 0; i < amount_of_layer; i++) {
         for (size_t y = 0; y < FULL_CIRCLE; y++) {
@@ -242,9 +249,27 @@ void build_sin_table() {
     }
 }
 
+// compares two frames (old and new bitmap) and returns the number of unchanged rows
+// unchanged rows are skipped during rendering to optimize render time
+int compare_bitmap_y_axis() {
+    for (size_t i = 0; i < SCREEN_HEIGHT; i++) {
+        bool same = true;
+
+        for (size_t x = 0; x < SCREEN_WIDTH; x++) {
+            if (bitmap[i * SCREEN_WIDTH + x] != old_bitmap[i * SCREEN_WIDTH + x]) {
+                same = false;
+                break;
+            }
+        }
+
+        if (!same) return i;
+    }
+    return SCREEN_HEIGHT;
+}
+
 void setup() {
     display.begin();
-    Serial.begin(115200);
+    Serial.begin(SERIAL_MONITOR_BAUD_RATE);
 
     // clear screen
     fill_screen_blank_color((Color){255, 255, 255});
@@ -253,18 +278,21 @@ void setup() {
     amount_of_trees = sizeof(trees) / sizeof(trees[0]);
     amount_of_layer = sizeof(layers) / sizeof(layers[0]);
 
-    // build lookup table
+    // build lookup table for the sin function
     build_sin_table();
 
     Serial.println("Starting main render loop");
 }
 
-unsigned long timing = 0;
+
 
 void loop() {
+    // get timing and fps so is displays the performance and fps
+    unsigned long timing = millis();
+    unsigned long fps = millis();
+
     // get time in seconds from boot to make animation play
     double time = time_from_boot_in_sec();
-    timing = millis();
 
     Serial.print("Build world in: ");
 
@@ -275,8 +303,21 @@ void loop() {
     plant_trees(time);
 
     Serial.print(millis() - timing);
-    Serial.println(" millis");
+    Serial.print(" millis, Render in: ");
 
-    // display the full bitmap on screen
-    render_screen();
+    // reset timing for rendering to screen
+    timing = millis();
+
+    // get the count of matching rows in the bitmap so it can ignore un-updated pixels
+    int rows_alike = compare_bitmap_y_axis();
+    
+    // render bitmap to screen
+    render_screen(rows_alike);
+
+    Serial.print(millis() - timing);
+    Serial.print(" millis, fps: ");
+    Serial.println(1000.0 / (float)(millis() - fps));
+
+    // copy new bitmap to old bitmap
+    memcpy(old_bitmap, bitmap, sizeof(old_bitmap));
 }
