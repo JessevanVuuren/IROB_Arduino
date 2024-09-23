@@ -3,7 +3,5 @@
 // https://github.com/adafruit/Adafruit-SSD1331-OLED-Driver-Library-for-Arduino/tree/master
 // https://www.waveshare.com/wiki/0.95inch_RGB_OLED_(B)
 
-platformio.exe run --target upload --environment esp32doit-devkit-v1
-
 platformio.exe run --target upload --upload-port COM3
 platformio.exe device monitor --port COM3
